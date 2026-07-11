@@ -1,11 +1,93 @@
-# Import os module to handle file checks and dynamic folder navigation for payload loading
+# Import os module to check for CSV training file existence
 import os
-# Import sys module to control exit codes on test assertion failures
+# Import sys module to control exit code statuses on validation failures
 import sys
-# Import json library to parse test payload properties from the static JSON file
-import json
-# Import httpx library to make HTTP requests (GET/POST) to query the FastAPI server endpoints
+# Import csv module to parse transaction records from the training CSV
+import csv
+# Import httpx library to make high-performance HTTP requests to the FastAPI endpoints
 import httpx
+
+# Define helper to extract real payloads directly from the training CSV file
+def load_payloads_from_csv(csv_filename="iso-training-data.csv"):
+    """
+    Reads the training CSV file and extracts one standard user sample
+    and one malicious bad user sample to be used as test inputs.
+    """
+    # Initialize default search target path
+    csv_path = csv_filename
+    # If the file is not in current directory, check script absolute directory
+    if not os.path.exists(csv_path):
+        # Calculate absolute directory location of this script
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        # Build path pointing to CSV file inside the script folder
+        csv_path = os.path.join(script_dir, csv_filename)
+        
+    # Check if the training CSV remains missing
+    if not os.path.exists(csv_path):
+        # Log missing file error description and terminate process
+        print(f"❌ Error: Cannot find '{csv_filename}' in current directory or script folder.")
+        sys.exit(1)
+        
+    # Initialize variables to hold test cases
+    standard_user = None
+    bad_user = None
+    
+    # Open CSV file using standard context manager
+    with open(csv_path, mode="r", encoding="utf-8") as f:
+        # Instantiate DictReader to automatically parse header row
+        reader = csv.DictReader(f)
+        # Iterate over each row dictionary in the CSV
+        for row in reader:
+            # Map string cell values to corresponding float and integer types
+            mapped_row = {
+                "seconds_since_page_load": float(row["seconds_since_page_load"]),
+                "failed_attempts_past_hour": int(row["failed_attempts_past_hour"]),
+                "unique_cards_per_ip": int(row["unique_cards_per_ip"]),
+                "is_datacenter_ip": int(row["is_datacenter_ip"]),
+                "accounts_per_device_24h": int(row["accounts_per_device_24h"])
+            }
+            
+            # Condition for Standard User: 0 failed attempts, residential/mobile IP, and 1 card
+            if (mapped_row["failed_attempts_past_hour"] == 0 and 
+                mapped_row["is_datacenter_ip"] == 0 and 
+                mapped_row["unique_cards_per_ip"] == 1 and 
+                standard_user is None):
+                # Save standard user test case payload
+                standard_user = mapped_row
+                
+            # Condition for Malicious User: high failed attempts (>= 15), high cards (>= 5), and datacenter IP
+            if (mapped_row["failed_attempts_past_hour"] >= 15 and 
+                mapped_row["unique_cards_per_ip"] >= 5 and 
+                mapped_row["is_datacenter_ip"] == 1 and 
+                bad_user is None):
+                # Save malicious bad user test case payload
+                bad_user = mapped_row
+                
+            # Break early if both test cases have been identified
+            if standard_user is not None and bad_user is not None:
+                break
+                
+    # Fallback to defaults if standard user sample is not found in CSV
+    if not standard_user:
+        standard_user = {
+            "seconds_since_page_load": 13.16,
+            "failed_attempts_past_hour": 0,
+            "unique_cards_per_ip": 1,
+            "is_datacenter_ip": 0,
+            "accounts_per_device_24h": 1
+        }
+    # Fallback to defaults if malicious user sample is not found in CSV
+    if not bad_user:
+        bad_user = {
+            "seconds_since_page_load": 0.91,
+            "failed_attempts_past_hour": 23,
+            "unique_cards_per_ip": 10,
+            "is_datacenter_ip": 1,
+            "accounts_per_device_24h": 1
+        }
+        
+    # Return both extracted test payload dictionaries
+    return standard_user, bad_user
 
 # Define testing routine taking target server location URL
 def run_tests(base_url="http://127.0.0.1:8000"):
@@ -14,45 +96,10 @@ def run_tests(base_url="http://127.0.0.1:8000"):
     print(f"Testing live FastAPI Server at {base_url}")
     print("====================================================\n")
     
-    # Establish target name of the payloads metadata file
-    payload_file = "sample_payloads.json"
-    # If the file doesn't exist in current directory, check script absolute directory path
-    if not os.path.exists(payload_file):
-        # Calculate absolute directory location of this script
-        script_dir = os.path.dirname(os.path.abspath(__file__))
-        # Build path pointing to payload file inside the script folder
-        payload_file = os.path.join(script_dir, "sample_payloads.json")
-        
-    # Check if payload file remains missing after path scans
-    if not os.path.exists(payload_file):
-        # Log missing file error description and terminate process
-        print(f"❌ Error: Cannot find 'sample_payloads.json' in current directory or script folder.")
-        sys.exit(1)
-        
-    # Read and decode JSON file containing sample inputs
-    try:
-        # Load file stream in read-only mode
-        with open(payload_file, "r") as f:
-            # Parse payload data text as JSON object dictionary
-            payloads = json.load(f)
-    # Catch syntax error or IO read error
-    except Exception as e:
-        # Log parse error details to the test outputs
-        print(f"❌ Error reading JSON payload file: {e}")
-        # Exit process with failure status code
-        sys.exit(1)
-        
-    # Extract standard and malicious user dict structures from parent dictionary
-    standard_payload = payloads.get("standard_user")
-    bad_payload = payloads.get("bad_user")
+    # Load dynamically parsed payloads from the training CSV
+    standard_payload, bad_payload = load_payloads_from_csv("iso-training-data.csv")
+    print(f"✔ Successfully extracted test samples from 'iso-training-data.csv'.")
     
-    # Check if either test case payload was missing from JSON structure
-    if not standard_payload or not bad_payload:
-        # Print warning indicating missing keys
-        print("❌ Error: Sample payloads must contain keys 'standard_user' and 'bad_user'.")
-        # Exit process
-        sys.exit(1)
-        
     # Initialize connection logic to communicate with FastAPI server
     try:
         # Instantiate HTTPX client setting base URL and 5 second connection timeout limit
@@ -125,13 +172,13 @@ def run_tests(base_url="http://127.0.0.1:8000"):
         sys.exit(1)
     # Catch validation assertion mismatches
     except AssertionError as ae:
-        # Output failure details
+        # Print failure output details
         print(f"❌ Assert Failure: {ae}")
         # Exit process with error code
         sys.exit(1)
     # Catch unexpected code failures
     except Exception as e:
-        # Output general troubleshooting log
+        # Log failure message
         print(f"❌ Unexpected error occurred during tests: {e}")
         # Exit process with error code
         sys.exit(1)
