@@ -2,10 +2,11 @@
 
 ### 💡 Concept
 
-This microservice provides a real-time, unsupervised anomaly detection layer designed to catch card-testing fraud during the "Add Card" flow. By evaluating user behavior and network footprint simultaneously, it identifies automated botnets and advanced fraudsters before a transaction is attempted.
+This repo contains the prototype to showcase a real-time use case with unsupervised anomaly detection model to catch card-testing fraud during the "Add Card" flow. By evaluating user behavior and network footprint simultaneously, it identifies automated botnets and advanced fraudsters before a transaction is attempted.
 
 ### 🌲 Why Isolation Forest?
 
+* **Isolation Forest:** combines hundreds of the exact same type of model: Decision Trees (specifically, a unique variation called Isolation Trees or iTrees). Just like a real forest is made of many individual trees, an Isolation Forest is made of hundreds of Isolation Trees (usually 100 by default in scikit-learn).
 * **Unsupervised Advantage:** Fraud tactics change constantly. Isolation Forest doesn't rely on historical labels of "known fraud"; instead, it explicitly isolates unusual data points by randomly partitioning features.
 * **Speed:** It has a low memory footprint and fast inference time, making it ideal for blocking attacks in the synchronous checkout path.
 * **Linear Scaling:** It handles high-dimensional data efficiently, allowing us to easily add more behavioral features later.
