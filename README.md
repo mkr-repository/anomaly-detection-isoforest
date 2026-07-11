@@ -1,3 +1,31 @@
+## 💳 Real-Time Card-Testing Detection Layer
+
+### 💡 Concept
+
+This microservice provides a real-time, unsupervised anomaly detection layer designed to catch card-testing fraud during the "Add Card" flow. By evaluating user behavior and network footprint simultaneously, it identifies automated botnets and advanced fraudsters before a transaction is attempted.
+
+### 🌲 Why Isolation Forest?
+
+* **Unsupervised Advantage:** Fraud tactics change constantly. Isolation Forest doesn't rely on historical labels of "known fraud"; instead, it explicitly isolates unusual data points by randomly partitioning features.
+* **Speed:** It has a low memory footprint and fast inference time, making it ideal for blocking attacks in the synchronous checkout path.
+* **Linear Scaling:** It handles high-dimensional data efficiently, allowing us to easily add more behavioral features later.
+
+### 📊 Feature Engineering
+
+The model evaluates 5 distinct dimensions to score an incoming request:
+
+1. `seconds_since_page_load` ⏱️: Identifies rapid, script-driven bot behavior versus human pacing.
+2. `failed_attempts_past_hour` ❌: Tracks velocity of errors on the payment gateway.
+3. `unique_cards_per_ip` 💳: Catches distributed card-testing attacks originating from a single node.
+4. `is_datacenter_ip` 🏢: Instantly flags non-residential infrastructure (VPNs, cloud servers).
+5. `accounts_per_device_24h` 📱: Detects device fingerprint recycling across multiple user accounts.
+
+### ⚙️ Core Hyperparameters & Scoring
+
+* **Contamination (`0.10`)**: Anchors the model to flag the top 10% most anomalous traffic by default.
+* **Decision Boundary (`0.0`)**: The mathematical cutoff where scores below `0.0` represent anomalies.
+* **Dynamic Thresholding**: The backend utilizes the raw `decision_function` score rather than a binary prediction. This allows the engineering team to shift the threshold dynamically (e.g., relaxing it to `-0.02` during peak shopping hours) to minimize False Positives without retraining the model.
+
 # Walkthrough: Decoupled FastAPI & Model Pipeline
 
 The fraud detection codebase is modularized so that the web framework, schemas, data-handling pipelines, and validation scripts are entirely decoupled.
