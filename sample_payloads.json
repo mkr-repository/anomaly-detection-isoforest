@@ -1,0 +1,16 @@
+{
+  "standard_user": {
+    "seconds_since_page_load": 18.5,
+    "failed_attempts_past_hour": 0,
+    "unique_cards_per_ip": 1,
+    "is_datacenter_ip": 0,
+    "accounts_per_device_24h": 1
+  },
+  "bad_user": {
+    "seconds_since_page_load": 18,
+    "failed_attempts_past_hour": 1,
+    "unique_cards_per_ip": 1,
+    "is_datacenter_ip": 1,
+    "accounts_per_device_24h": 1
+  }
+}
