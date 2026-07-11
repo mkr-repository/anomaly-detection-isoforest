@@ -26,6 +26,54 @@ The model evaluates 5 distinct dimensions to score an incoming request:
 * **Decision Boundary (`0.0`)**: The mathematical cutoff where scores below `0.0` represent anomalies.
 * **Dynamic Thresholding**: The backend utilizes the raw `decision_function` score rather than a binary prediction. This allows the engineering team to shift the threshold dynamically (e.g., relaxing it to `-0.02` during peak shopping hours) to minimize False Positives without retraining the model.
 
+### 🔌 Example API Requests & Responses
+
+#### 🟢 Scenario 1: Standard User (Normal Behavior)
+The standard user takes typical time to load the checkout page, has no failures, is on a residential IP network, and accesses only one account. The system yields `ALLOW`.
+
+* **Request Body POST `/add-card/analyze`:**
+```json
+{
+  "seconds_since_page_load": 18.5,
+  "failed_attempts_past_hour": 0,
+  "unique_cards_per_ip": 1,
+  "is_datacenter_ip": 0,
+  "accounts_per_device_24h": 1
+}
+```
+
+* **Response Body (HTTP 200 OK):**
+```json
+{
+  "raw_anomaly_score": 0.19924461623448608,
+  "prediction": 0,
+  "action_required": "ALLOW"
+}
+```
+
+#### 🔴 Scenario 2: Advanced Bad User (Card-Testing Bot)
+The card-testing bot triggers programmatic forms submits in under a second, triggers 15 card errors in an hour, rotates through 8 different card numbers, operates via cloud hosting infrastructure (datacenter IP), and controls 6 user accounts. The system yields `CHALLENGE_CAPTCHA`.
+
+* **Request Body POST `/add-card/analyze`:**
+```json
+{
+  "seconds_since_page_load": 0.45,
+  "failed_attempts_past_hour": 15,
+  "unique_cards_per_ip": 8,
+  "is_datacenter_ip": 1,
+  "accounts_per_device_24h": 6
+}
+```
+
+* **Response Body (HTTP 200 OK):**
+```json
+{
+  "raw_anomaly_score": -0.048444853651749664,
+  "prediction": 1,
+  "action_required": "CHALLENGE_CAPTCHA"
+}
+```
+
 # Walkthrough: Decoupled FastAPI & Model Pipeline
 
 The fraud detection codebase is modularized so that the web framework, schemas, data-handling pipelines, and validation scripts are entirely decoupled.
